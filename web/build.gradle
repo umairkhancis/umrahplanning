@@ -1,0 +1,69 @@
+group "org.kotlinacademy"
+version "1.1"
+
+apply plugin: 'kotlin2js'
+apply plugin: 'org.jetbrains.kotlin.frontend'
+
+kotlinFrontend {
+    downloadNodeJsVersion = '10.0.0'
+
+    npm {
+        dependency("kotlinx-html-js")
+        dependency("react")
+        dependency("react-dom")
+        dependency("material-components-web") // installed via npm only
+    }
+
+    sourceMaps = true
+
+    webpackBundle {
+        bundleName = "main"
+        contentPath = file('src/main/web')
+        proxyUrl = "http://localhost:8080"
+    }
+}
+
+dependencies {
+    compile "org.jetbrains.kotlin:kotlin-stdlib-js:$kotlin_version"
+    compile("org.jetbrains.kotlinx:kotlinx-html-js:0.6.11") { force = true }
+    compile "org.jetbrains:kotlin-react:16.4.1-pre.34-kotlin-1.2.50"
+    compile "org.jetbrains:kotlin-react-dom:16.4.1-pre.34-kotlin-1.2.50"
+
+    testCompile "org.jetbrains.kotlin:kotlin-test:$kotlin_version"
+    testCompile "org.jetbrains.kotlin:kotlin-test-js:$kotlin_version"
+    testCompile "io.mockk:mockk-js:$mockk_version"
+}
+
+compileKotlin2Js {
+    kotlinOptions.metaInfo = true
+    kotlinOptions.outputFile = "$project.buildDir.path/js/${project.name}.js"
+    kotlinOptions.sourceMap = true
+    kotlinOptions.moduleKind = 'commonjs'
+    kotlinOptions.main = "call"
+}
+
+task populateNodeModules(type: Copy, dependsOn: compileKotlin2Js) {
+    from compileKotlin2Js.destinationDir
+
+    configurations.testCompile.each {
+        from zipTree(it.absolutePath).matching { include '*.js' }
+    }
+
+    into "${buildDir}/node_modules"
+}
+
+node {
+    version = nodeVersion
+    download = true
+}
+
+task installMocha(type: NpmTask) {
+    args = ['install', 'mocha']
+}
+
+task runMocha(type: NodeTask, dependsOn: [compileTestKotlin2Js, populateNodeModules, installMocha]) {
+    script = file('node_modules/mocha/bin/mocha')
+    args = [compileTestKotlin2Js.outputFile]
+}
+
+test.dependsOn runMocha
